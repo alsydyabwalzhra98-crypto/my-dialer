@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Private Dialer - Final Production</title>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- 1. Google Identity Services SDK -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    
+    <!-- 2. PayPal SDK (Sandbox) -->
+    <script src="https://www.paypal.com/sdk.js?client-id=Ab8LB3Y9tLdK0VZuW7TkLIGRQr7r5IEp1BuEhe4lEbARhQzv9sdKPXnlFkEIN25OkplMfd_VbtO4RhIF&currency=USD"></script>
+    
+    <style>
+        :root {
+            --primary: #0EA5E9; /* Sky Blue */
+            --primary-dark: #0284C7;
+            --primary-light: #E0F2FE;
+            --secondary: #10B981;
+            --danger: #EF4444;
+            --warning: #F59E0B;
+            --background: #F1F5F9;
+            --surface: #FFFFFF;
+            --text-main: #334155;
+            --text-light: #94A3B8;
+            --border: #E2E8F0;
+            --nav-height: 60px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #e2e8f0; display: flex; justify-content: center; align-items: center; min-height: 100vh; }
+
+        #app-root {
+            width: 100%; max-width: 400px; height: 100vh; max-height: 900px;
+            background-color: var(--surface); position: relative; overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            display: flex; flex-direction: column;
+        }
+
+        /* Utility Classes */
+        .hidden { display: none !important; }
+        .flex { display: flex; } .flex-col { flex-direction: column; } .items-center { align-items: center; } .justify-center { justify-content: center; } .justify-between { justify-content: space-between; } .w-full { width: 100%; } .text-center { text-align: center; } .font-bold { font-weight: 700; } .text-sm { font-size: 0.85rem; } .text-primary { color: var(--primary); } .text-danger { color: var(--danger); } .p-4 { padding: 1rem; }
+        
+        /* Buttons & Inputs */
+        .btn { padding: 12px 20px; border-radius: 12px; border: none; cursor: pointer; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn:active { transform: translateY(1px); }
+        .btn:disabled { background: #CBD5E1; cursor: not-allowed; opacity: 0.7; }
+        .btn-primary { background: var(--primary); color: white; width: 100%; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.3); }
+        .btn-google { background-color: white; color: #334155; border: 1px solid var(--border); width: 100%; }
+        
+        .input-group { margin-bottom: 1rem; text-align: left; }
+        .label { display: block; margin-bottom: 8px; font-size: 0.85rem; color: var(--text-light); font-weight: 500; }
+        .input { width: 100%; padding: 14px; border: 1px solid var(--border); border-radius: 12px; font-size: 1rem; outline: none; background: #F8FAFC; }
+        .input:focus { border-color: var(--primary); background: white; }
+
+        /* Toggle Switch */
+        .toggle-row { display: flex; justify-content: space-between; align-items: center; background: #F8FAFC; padding: 8px 12px; border-radius: 10px; margin-bottom: 8px; }
+        .toggle-label { font-size: 0.8rem; color: var(--text-main); font-weight: 600; }
+        .switch { position: relative; display: inline-block; width: 44px; height: 24px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #CBD5E1; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 3px; bottom: 3px; background-color: white; transition: .4s; border-radius: 50%; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        input:checked + .slider { background-color: var(--primary); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Auth Screen */
+        #view-auth { height: 100%; display: flex; flex-direction: column; justify-content: center; padding: 2rem; background: white; text-align: center; }
+        .auth-logo { width: 70px; height: 70px; background: var(--primary-light); border-radius: 18px; color: var(--primary); font-size: 2rem; display: flex; align-items: center; justify-content: center; margin: 0 auto 1.5rem auto; }
+        
+        .loader { width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid var(--primary); border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Header */
+        header { height: 60px; background: white; display: flex; align-items: center; justify-content: space-between; padding: 0 1.2rem; border-bottom: 1px solid transparent; }
+        .header-title { font-size: 1.2rem; font-weight: 700; color: var(--text-main); }
+        .balance-badge { background: var(--primary-light); color: var(--primary-dark); padding: 6px 12px; border-radius: 20px; font-size: 0.8rem; font-weight: 700; }
+
+        /* Views */
+        main { flex: 1; overflow-y: auto; position: relative; background: var(--background); }
+        
+        /* Dialpad */
+        #view-dialpad { display: flex; flex-direction: column; height: 100%; background: white; padding-bottom: 20px; }
+        .dialpad-top-section { padding: 1rem 1.5rem; background: #FAFAFA; border-bottom-left-radius: 30px; border-bottom-right-radius: 30px; box-shadow: 0 4px 20px rgba(0,0,0,0.03); padding-bottom: 2rem; }
+        .dialpad-controls { display: flex; gap: 10px; margin-bottom: 1rem; }
+        .alias-input-container { margin-bottom: 0.5rem; }
+        .alias-input { width: 100%; border: none; background: transparent; font-size: 1.1rem; color: var(--text-light); text-align: center; outline: none; font-weight: 500; }
+        .alias-input::placeholder { color: #CBD5E1; font-style: italic; }
+        .display-area { display: flex; flex-direction: column; align-items: center; min-height: 60px; position: relative; }
+        .phone-display { font-size: 2.2rem; font-weight: 300; color: var(--text-main); letter-spacing: 2px; text-align: center; }
+        .rate-hint { font-size: 0.8rem; color: var(--text-light); background: #e2e8f0; padding: 4px 12px; border-radius: 12px; margin-top: 8px; font-weight: 600; }
+        
+        .keypad-container { flex: 1; display: flex; flex-direction: column; justify-content: center; padding: 1rem 2rem; }
+        .keypad-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 25px; }
+        .key { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60px; background: #F8FAFC; border-radius: 16px; cursor: pointer; transition: background 0.1s; }
+        .key:active { background: #E2E8F0; }
+        .key-num { font-size: 1.8rem; font-weight: 500; color: var(--text-main); }
+        .key-sub { font-size: 0.7rem; color: var(--text-light); margin-top: -2px; }
+        
+        .call-btn-area { display: flex; justify-content: center; padding-top: 10px; }
+        .call-btn { width: 70px; height: 70px; background: var(--secondary); border-radius: 50%; color: white; font-size: 1.8rem; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 8px 20px rgba(16, 185, 129, 0.4); transition: transform 0.2s; }
+        .call-btn:active { transform: scale(0.95); }
+        .call-btn.disabled { background: #CBD5E1; box-shadow: none; cursor: not-allowed; }
+
+        /* List Items */
+        .list-item { background: white; padding: 1rem; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 1rem; }
+        .avatar { width: 45px; height: 45px; background: var(--primary-light); color: var(--primary); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.1rem; }
+        .item-details { flex: 1; }
+        .item-title { font-weight: 600; color: var(--text-main); font-size: 1rem; }
+        .item-subtitle { font-size: 0.85rem; color: var(--text-light); margin-top: 2px; }
+
+        /* Wallet */
+        .wallet-card { background: linear-gradient(135deg, #0F172A 0%, #334155 100%); color: white; padding: 2rem; border-radius: 20px; margin: 1rem; box-shadow: 0 10px 20px rgba(0,0,0,0.15); position: relative; overflow: hidden; }
+        .wallet-amount { font-size: 2.8rem; font-weight: 700; margin: 0.5rem 0; }
+        .transaction-item { display: flex; justify-content: space-between; padding: 1rem; border-bottom: 1px solid #F1F5F9; align-items: center; }
+        .t-icon { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-right: 12px; font-size: 0.8rem; }
+        .t-plus { background: #DCFCE7; color: #166534; }
+        .t-minus { background: #FEE2E2; color: #991B1B; }
+
+        /* Navigation (5 Tabs) */
+        nav { height: var(--nav-height); background: white; display: flex; justify-content: space-around; align-items: center; box-shadow: 0 -4px 20px rgba(0,0,0,0.03); padding-bottom: env(safe-area-inset-bottom); }
+        .nav-item { display: flex; flex-direction: column; align-items: center; color: #CBD5E1; font-size: 0.7rem; cursor: pointer; flex: 1; transition: color 0.2s; }
+        .nav-item i { font-size: 1.2rem; margin-bottom: 2px; }
+        .nav-item.active { color: var(--primary); }
+
+        /* InCall Overlay */
+        #incall-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(to bottom, #0F172A, #334155); color: white; z-index: 100; display: flex; flex-direction: column; align-items: center; padding-top: 4rem; }
+        .incall-avatar { width: 110px; height: 110px; border-radius: 50%; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); margin-bottom: 2rem; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; color: var(--primary); }
+        .incall-controls { margin-top: auto; margin-bottom: 3rem; display: flex; gap: 2rem; width: 80%; justify-content: center; }
+        .incall-btn { width: 65px; height: 65px; border-radius: 50%; background: rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: center; font-size: 1.4rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); }
+        .incall-btn.end { background: var(--danger); border: none; box-shadow: 0 4px 15px rgba(239, 68, 68, 0.4); }
+
+        /* Toast */
+        #toast { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.9); color: white; padding: 12px 24px; border-radius: 30px; font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; pointer-events: none; white-space: nowrap; z-index: 200; }
+        #toast.show { opacity: 1; }
+        
+        /* Containers */
+        #google-signin-btn-container { margin: 20px auto; width: 100%; min-height: 40px; }
+        #paypal-button-container { width: 100%; margin-top:1rem; }
+    </style>
+</head>
+<body>
+
+<div id="app-root">
+    
+    <!-- Auth Screen -->
+    <div id="view-auth">
+        <div class="auth-logo"><i class="fa-solid fa-phone-volume"></i></div>
+        <h1 class="font-bold mb-4" style="font-size: 1.6rem; color: var(--text-main);">Private Dialer</h1>
+        
+        <!-- Status Message Area -->
+        <div id="auth-status" class="text-sm mb-4" style="color: var(--text-light);">
+            Loading Google Authentication...
+        </div>
+
+        <!-- Google Button Placeholder (Will be filled by JS) -->
+        <div id="google-signin-btn-container">
+            <div class="loader"></div>
+        </div>
+
+        <!-- Error / Fallback Section (Hidden initially) -->
+        <div id="auth-fallback" class="hidden" style="margin-top: 20px; width: 100%;">
+            <p class="text-xs text-danger mb-2 font-bold" id="error-msg">Connection Error</p>
+            <button class="btn btn-google" onclick="app.auth.demoLogin()">
+                <i class="fa-solid fa-user-lock"></i> Demo Login
+            </button>
+            <p class="text-xs text-light mt-2" style="font-size: 0.65rem;">
+                Note: Use Localhost or Local Server for Google Auth.
+            </p>
+        </div>
+    </div>
+
+    <!-- Main App Interface -->
+    <div id="main-interface" class="hidden flex-col w-full" style="height: 100%;">
+        
+        <!-- Header -->
+        <header>
+            <div class="header-title" id="page-title">Keypad</div>
+            <div class="balance-badge" id="header-balance">$0.00</div>
+        </header>
+
+        <!-- Content Views -->
+        <main id="content-area">
+            
+            <!-- 1. Dialpad View -->
+            <div id="view-dialpad">
+                <div class="dialpad-top-section">
+                    <div class="dialpad-controls">
+                        <div class="toggle-row" style="flex:1;">
+                            <span class="toggle-label"><i class="fa-solid fa-user-secret"></i> Hide ID</span>
+                            <label class="switch"><input type="checkbox" id="toggle-hide-id"><span class="slider"></span></label>
+                        </div>
+                        <div class="toggle-row" style="flex:1;">
+                            <span class="toggle-label"><i class="fa-solid fa-microphone-lines"></i> Record</span>
+                            <label class="switch"><input type="checkbox" id="toggle-record-call"><span class="slider"></span></label>
+                        </div>
+                    </div>
+
+                    <div class="display-area">
+                        <div class="alias-input-container">
+                            <input type="text" id="alias-input" class="alias-input" placeholder="Caller Alias (Optional)...">
+                        </div>
+                        <div class="phone-display" id="dial-display"></div>
+                        <div class="rate-hint" id="rate-hint">Rate: $0.05/min</div>
+                        <!-- Backspace Button Inline -->
+                        <button id="btn-backspace" class="hidden" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); background:none; border:none; color:#94A3B8; font-size:1.5rem; cursor:pointer;" onclick="app.dialpad.press('del')">
+                            <i class="fa-solid fa-delete-left"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="keypad-container">
+                    <div class="keypad-grid">
+                        <div class="key" onclick="app.dialpad.press('1')"><div class="key-num">1</div><div class="key-sub">&nbsp;</div></div>
+                        <div class="key" onclick="app.dialpad.press('2')"><div class="key-num">2</div><div class="key-sub">ABC</div></div>
+                        <div class="key" onclick="app.dialpad.press('3')"><div class="key-num">3</div><div class="key-sub">DEF</div></div>
+                        <div class="key" onclick="app.dialpad.press('4')"><div class="key-num">4</div><div class="key-sub">GHI</div></div>
+                        <div class="key" onclick="app.dialpad.press('5')"><div class="key-num">5</div><div class="key-sub">JKL</div></div>
+                        <div class="key" onclick="app.dialpad.press('6')"><div class="key-num">6</div><div class="key-sub">MNO</div></div>
+                        <div class="key" onclick="app.dialpad.press('7')"><div class="key-num">7</div><div class="key-sub">PQRS</div></div>
+                        <div class="key" onclick="app.dialpad.press('8')"><div class="key-num">8</div><div class="key-sub">TUV</div></div>
+                        <div class="key" onclick="app.dialpad.press('9')"><div class="key-num">9</div><div class="key-sub">WXYZ</div></div>
+                        <div class="key" onclick="app.dialpad.press('*')"><div class="key-num">*</div></div>
+                        <div class="key" onclick="app.dialpad.press('0')"><div class="key-num">0</div><div class="key-sub">+</div></div>
+                        <div class="key" onclick="app.dialpad.press('#')"><div class="key-num">#</div></div>
+                    </div>
+                    <div class="call-btn-area">
+                        <div class="call-btn" id="btn-call" onclick="app.calls.initiateCallSequence()">
+                            <i class="fa-solid fa-phone"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. Contacts View -->
+            <div id="view-contacts" class="hidden w-full" style="background: var(--background);">
+                <div class="p-4 flex justify-between items-center" style="background:white; padding-bottom:1rem;">
+                    <input type="text" placeholder="Search..." class="input" style="padding: 10px; background:var(--background);">
+                    <button class="btn btn-primary" style="padding: 10px; width: 45px; height: 45px;"><i class="fa-solid fa-plus"></i></button>
+                </div>
+                <div style="background:white; border-radius: 20px 20px 0 0; padding-bottom: 2rem;">
+                    <div id="contacts-list"></div>
+                </div>
+            </div>
+
+            <!-- 3. SMS View -->
+            <div id="view-sms" class="hidden chat-container" style="background: var(--background);">
+                <div class="chat-messages" id="chat-list" style="padding-top:1rem; min-height: 300px;"></div>
+                <div style="padding: 15px; background:white; border-top:1px solid var(--border);">
+                    <div class="flex gap-2">
+                        <input type="text" id="sms-body" class="input" placeholder="Type a message..." onkeypress="if(event.key==='Enter') app.sms.send()">
+                        <button class="btn btn-primary" style="border-radius:12px; padding: 0 20px;" onclick="app.sms.send()"><i class="fa-solid fa-paper-plane"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. Logs View -->
+            <div id="view-logs" class="hidden w-full" style="background: var(--background);">
+                <div style="background:white; padding:1rem; margin-bottom:1px; font-weight:bold; color:var(--text-light);">Call History</div>
+                <div style="background:white;" id="logs-list"></div>
+            </div>
+
+            <!-- 5. Wallet View -->
+            <div id="view-wallet" class="hidden w-full" style="background: var(--background);">
+                <div class="wallet-card">
+                    <div class="text-sm opacity-70">Available Balance</div>
+                    <div class="wallet-amount" id="wallet-balance">$0.00</div>
+                    <div class="text-sm opacity-70">ID: <span id="wallet-userid">---</span></div>
+                </div>
+
+                <div class="p-4">
+                    <h3 class="font-bold mb-2">Top Up Balance</h3>
+                    <div class="input-group">
+                        <label class="label">Amount ($)</label>
+                        <div class="flex gap-2 mb-2">
+                            <button class="btn" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1;" onclick="document.getElementById('topup-amount').value=0.99">$0.99</button>
+                            <button class="btn" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1;" onclick="document.getElementById('topup-amount').value=9.99">$9.99</button>
+                            <button class="btn" style="flex:1; background:#f1f5f9; border:1px solid #cbd5e1;" onclick="document.getElementById('topup-amount').value=49.99">$49.99</button>
+                        </div>
+                        <input type="number" id="topup-amount" class="input" value="9.99" min="0.99" step="0.01">
+                    </div>
+                    <div id="paypal-button-container"></div>
+                    
+                    <h3 class="font-bold mt-6 mb-2">Recent Transactions</h3>
+                    <div class="transaction-list" id="tx-list"></div>
+                </div>
+            </div>
+
+        </main>
+
+        <!-- Bottom Navigation (5 Tabs) -->
+        <nav>
+            <div class="nav-item active" onclick="app.router.navigate('dialpad')" id="nav-dialpad">
+                <i class="fa-solid fa-braille"></i>
+                <span>Key</span>
+            </div>
+            <div class="nav-item" onclick="app.router.navigate('contacts')" id="nav-contacts">
+                <i class="fa-solid fa-address-book"></i>
+                <span>Cont</span>
+            </div>
+            <div class="nav-item" onclick="app.router.navigate('sms')" id="nav-sms">
+                <i class="fa-solid fa-comment-dots"></i>
+                <span>SMS</span>
+            </div>
+            <div class="nav-item" onclick="app.router.navigate('logs')" id="nav-logs">
+                <i class="fa-solid fa-clock-rotate-left"></i>
+                <span>Logs</span>
+            </div>
+            <div class="nav-item" onclick="app.router.navigate('wallet')" id="nav-wallet">
+                <i class="fa-solid fa-wallet"></i>
+                <span>Wallet</span>
+            </div>
+        </nav>
+
+    </div>
+
+    <!-- In Call Overlay -->
+    <div id="incall-screen" class="hidden">
+        <div class="incall-avatar"><i class="fa-solid fa-user"></i></div>
+        <h2 id="incall-name" class="font-bold text-xl">Unknown</h2>
+        <p id="incall-status" class="mt-2 text-sm opacity-70">Connecting...</p>
+        <p id="incall-timer" class="text-4xl font-light mt-6">00:00</p>
+        <p id="incall-cost" class="text-sm text-primary mt-2 font-bold">Cost: $0.00</p>
+
+        <div class="incall-controls">
+            <div class="incall-btn" id="btn-record"><i class="fa-solid fa-microphone-lines"></i></div>
+            <div class="incall-btn" onclick="app.calls.mute()"><i class="fa-solid fa-microphone-slash"></i></div>
+            <div class="incall-btn end" onclick="app.calls.terminateCall()"><i class="fa-solid fa-phone-slash"></i></div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast">Notification</div>
+
+</div>
+
+<script>
+    /**
+     * CONFIGURATION
+     */
+    const CONFIG = {
+        GOOGLE_CLIENT_ID: '28681238157-511fsv60vto9j108l9g70d74p9l2k9m9.apps.googleusercontent.com',
+        TWILIO: {
+            ACCOUNT_SID: 'AC0c0fe5a843e1bb89f92f484c2f8357c1',
+            API_KEY: 'SK372d1d1487a051b079e84d7de809f350',
+            API_SECRET: 'OHcZxNLkyIZ1Lzl6WXxSufZfZYgpjXQ3',
+            APP_SID: 'AP0d822f84bc53e8b60d9ad117c8490add',
+            CALLER_ID: '+17752620950'
+        },
+        BILLING: {
+            RATE_PER_MIN: 0.05
+        }
+    };
+
+    /**
+     * APPLICATION STATE
+     */
+    const app = {
+        state: {
+            user: null,
+            transactions: [],
+            currentCall: null,
+            timerInterval: null,
+            seconds: 0
+        },
+
+        init: () => {
+            // Check for existing session
+            const storedUser = localStorage.getItem('pd_user_v3');
+            if(storedUser) {
+                app.state.user = JSON.parse(storedUser);
+                app.state.transactions = JSON.parse(localStorage.getItem('pd_tx_v3') || '[]');
+                app.ui.enterApp();
+            } else {
+                // Try to load Google Auth
+                app.auth.loadGoogleAuth();
+            }
+        },
+
+        auth: {
+            loadGoogleAuth: () => {
+                // Check if using file:// protocol (Google blocks this)
+                if (window.location.protocol === 'file:') {
+                    document.getElementById('auth-status').innerText = "Error: Google Auth requires a server (http://localhost)";
+                    app.auth.showFallback();
+                    return;
+                }
+
+                // Set a timeout: If Google doesn't load in 3 seconds, show fallback
+                const timeoutId = setTimeout(() => {
+                    if(!window.google) {
+                        document.getElementById('auth-status').innerText = "Google API Timed Out";
+                        app.auth.showFallback();
+                    }
+                }, 3000);
+
+                // Initialize Google when ready
+                window.handleCredentialResponse = (response) => {
+                    clearTimeout(timeoutId);
+                    try {
+                        const payload = JSON.parse(atob(response.credential.split('.')[1]));
+                        const email = payload.email;
+                        
+                        const user = {
+                            email: email,
+                            id: payload.sub,
+                            username: email.split('@')[0],
+                            balance: 0.00
+                        };
+                        
+                        app.state.user = user;
+                        localStorage.setItem('pd_user_v3', JSON.stringify(user));
+                        app.ui.toast('Logged in via Google');
+                        app.ui.enterApp();
+                    } catch (e) {
+                        console.error(e);
+                        app.auth.showFallback("Failed to parse credentials");
+                    }
+                };
+
+                // We wait for script (defer) or poll for google object
+                const checkGoogle = setInterval(() => {
+                    if (window.google && window.google.accounts) {
+                        clearInterval(checkGoogle);
+                        clearTimeout(timeoutId);
+                        
+                        document.getElementById('google-signin-btn-container').innerHTML = ''; // Clear loader
+                        document.getElementById('auth-status').innerText = "Sign in to manage your account";
+                        
+                        try {
+                            google.accounts.id.initialize({
+                                client_id: CONFIG.GOOGLE_CLIENT_ID,
+                                callback: window.handleCredentialResponse,
+                                auto_select: false
+                            });
+                            google.accounts.id.renderButton(
+                                document.getElementById("google-signin-btn-container"),
+                                { theme: "outline", size: "large", text: "signin_with", shape: "rectangular", logo_alignment: "left", width: "100%" }
+                            );
+                        } catch (e) {
+                            console.error("Google Render Error", e);
+                            app.auth.showFallback();
+                        }
+                    }
+                }, 100);
+            },
+
+            showFallback: (msg) => {
+                const status = document.getElementById('auth-status');
+                const btnArea = document.getElementById('auth-fallback');
+                const errorMsg = document.getElementById('error-msg');
+                
+                status.innerText = msg || "Google Auth Failed. Please use Demo Mode.";
+                status.classList.add('text-danger');
+                
+                btnArea.classList.remove('hidden');
+                if(errorMsg) errorMsg.innerText = msg || "Google Connection Error";
+            },
+
+            demoLogin: () => {
+                const user = { email: 'demo@example.com', id: '123', username: 'DemoUser', balance: 0.00 };
+                app.state.user = user;
+                localStorage.setItem('pd_user_v3', JSON.stringify(user));
+                app.ui.toast('Demo Login');
+                app.ui.enterApp();
+            }
+        },
+
+        router: {
+            navigate: (viewId) => {
+                document.querySelectorAll('main > div').forEach(el => el.classList.add('hidden'));
+                document.getElementById(`view-${viewId}`).classList.remove('hidden');
+                document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+                document.getElementById(`nav-${viewId}`).classList.add('active');
+                
+                const titles = { dialpad: 'Keypad', contacts: 'Contacts', sms: 'Messages', logs: 'Call Logs', wallet: 'My Wallet' };
+                document.getElementById('page-title').innerText = titles[viewId];
+
+                if(viewId === 'wallet') app.wallet.render();
+                if(viewId === 'logs') app.logs.render();
+                if(viewId === 'wallet') app.payment.initPayPal();
+            }
+        },
+
+        payment: {
+            initPayPal: () => {
+                const container = document.getElementById('paypal-button-container');
+                if(container.children.length > 0) return; // Already initialized
+
+                if (window.paypal) {
+                    paypal.Buttons({
+                        style: { layout: 'vertical', color:  'gold', shape:  'rectangular', label:  'paypal' },
+                        createOrder: function(data, actions) {
+                            const amount = document.getElementById('topup-amount').value;
+                            if(!amount || amount <= 0) { alert("Please enter a valid amount"); return; }
+                            return actions.order.create({ purchase_units: [{ amount: { value: amount } }] });
+                        },
+                        onApprove: function(data, actions) {
+                            return actions.order.capture().then(function(details) {
+                                // SUCCESS: Update Balance
+                                const amount = parseFloat(document.getElementById('topup-amount').value);
+                                app.state.user.balance += amount;
+                                
+                                const tx = {
+                                    id: details.id,
+                                    type: 'credit',
+                                    amount: amount,
+                                    date: new Date().toISOString(),
+                                    desc: 'PayPal Top Up'
+                                };
+                                app.state.transactions.unshift(tx);
+                                app.storage.save();
+
+                                app.ui.updateBalance();
+                                app.wallet.renderTransactions();
+                                app.ui.toast(`Success! Added $${amount.toFixed(2)}`);
+                            });
+                        }
+                    }).render('#paypal-button-container');
+                }
+            }
+        },
+
+        calls: {
+            initiateCallSequence: async () => {
+                const num = document.getElementById('dial-display').innerText;
+                const alias = document.getElementById('alias-input').value;
+                const hideId = document.getElementById('toggle-hide-id').checked;
+                
+                if(!num) return app.ui.toast('Enter a number');
+
+                // Billing Check
+                if(app.state.user.balance < 0.05) {
+                    app.ui.toast('Insufficient Funds. Please Top Up.');
+                    app.router.navigate('wallet');
+                    return;
+                }
+
+                // UI Setup
+                const displayName = (hideId && alias) ? alias : num;
+                document.getElementById('incall-name').innerText = displayName;
+                document.getElementById('incall-screen').classList.remove('hidden');
+                document.getElementById('incall-status').innerText = 'Connecting...';
+
+                // Real Twilio Logic
+                try {
+                    const authString = btoa(`${CONFIG.TWILIO.API_KEY}:${CONFIG.TWILIO.API_SECRET}`);
+                    const isRecord = document.getElementById('toggle-record-call').checked;
+                    const recordAttr = isRecord ? ' record="record-from-answer"' : '';
+                    
+                    const twiml = `<Response><Dial callerId="${CONFIG.TWILIO.CALLER_ID}"${recordAttr}>${num}</Dial></Response>`;
+
+                    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${CONFIG.TWILIO.ACCOUNT_SID}/Calls.json`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Basic ${authString}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+                        body: new URLSearchParams({
+                            'To': num,
+                            'From': CONFIG.TWILIO.CALLER_ID,
+                            'Twiml': twiml
+                        })
+                    });
+                    
+                    document.getElementById('incall-status').innerText = 'Connected';
+                } catch (err) {
+                    console.warn("Twilio API Call Failed (Likely CORS). Simulated Mode Active.", err);
+                    document.getElementById('incall-status').innerText = 'Connected (Simulated)';
+                }
+
+                // Start Timer
+                app.state.seconds = 0;
+                app.state.currentCall = { startTime: Date.now(), number: num };
+                app.state.timerInterval = setInterval(() => {
+                    app.state.seconds++;
+                    const mins = Math.floor(app.state.seconds / 60).toString().padStart(2, '0');
+                    const secs = (app.state.seconds % 60).toString().padStart(2, '0');
+                    document.getElementById('incall-timer').innerText = `${mins}:${secs}`;
+                    
+                    const currentCost = (app.state.seconds / 60) * CONFIG.BILLING.RATE_PER_MIN;
+                    document.getElementById('incall-cost').innerText = `Cost: $${currentCost.toFixed(2)}`;
+                }, 1000);
+            },
+            mute: () => app.ui.toast('Mute Toggled'),
+            terminateCall: () => {
+                clearInterval(app.state.timerInterval);
+                
+                const durationMin = app.state.seconds / 60;
+                const cost = durationMin * CONFIG.BILLING.RATE_PER_MIN;
+
+                app.state.user.balance -= cost;
+                
+                const tx = {
+                    id: 'call_' + Date.now(),
+                    type: 'debit',
+                    amount: cost,
+                    date: new Date().toISOString(),
+                    desc: `Call to ${app.state.currentCall.number} (${Math.floor(app.state.seconds)}s)`
+                };
+                app.state.transactions.unshift(tx);
+                app.storage.save();
+
+                document.getElementById('incall-screen').classList.add('hidden');
+                document.getElementById('dial-display').innerText = '';
+                document.getElementById('alias-input').value = '';
+                app.ui.updateBalance();
+                app.logs.render();
+                app.ui.toast(`Call Ended. Charged $${cost.toFixed(2)}`);
+            }
+        },
+
+        logs: {
+            render: () => {
+                const list = document.getElementById('logs-list');
+                const calls = app.state.transactions.filter(t => t.desc && t.desc.startsWith('Call'));
+                
+                if(calls.length === 0) {
+                    list.innerHTML = '<div class="text-center text-sm text-light p-4">No calls yet</div>';
+                    return;
+                }
+
+                list.innerHTML = calls.map(c => `
+                    <div class="list-item">
+                        <div class="avatar" style="width:40px; height:40px; font-size:0.8rem; background:#f1f5f9; color:#64748b;"><i class="fa-solid fa-phone"></i></div>
+                        <div class="item-details">
+                            <div class="item-title">${c.desc.match(/to (.+?) \(/)[1]}</div>
+                            <div class="item-subtitle">${new Date(c.date).toLocaleString()}</div>
+                        </div>
+                        <div class="font-bold text-sm text-danger">-$${c.amount.toFixed(2)}</div>
+                    </div>
+                `).join('');
+            }
+        },
+
+        wallet: {
+            render: () => {
+                document.getElementById('wallet-userid').innerText = app.state.user.username;
+                document.getElementById('wallet-balance').innerText = `$${app.state.user.balance.toFixed(2)}`;
+                app.wallet.renderTransactions();
+            },
+            renderTransactions: () => {
+                const list = document.getElementById('tx-list');
+                if(app.state.transactions.length === 0) {
+                    list.innerHTML = '<div class="text-center text-sm text-light p-4">No transactions</div>';
+                    return;
+                }
+                list.innerHTML = app.state.transactions.map(t => `
+                    <div class="transaction-item">
+                        <div class="flex items-center">
+                            <div class="t-icon ${t.type === 'credit' ? 't-plus' : 't-minus'}">
+                                <i class="fa-solid ${t.type === 'credit' ? 'fa-arrow-down' : 'fa-arrow-up'}"></i>
+                            </div>
+                            <div>
+                                <div class="font-bold text-sm">${t.desc}</div>
+                                <div class="text-xs text-light">${new Date(t.date).toLocaleDateString()}</div>
+                            </div>
+                        </div>
+                        <div class="font-bold text-sm ${t.type === 'credit' ? 'text-primary' : 'text-danger'}">
+                            ${t.type === 'credit' ? '+' : '-'}$${t.amount.toFixed(2)}
+                        </div>
+                    </div>
+                `).join('');
+            }
+        },
+
+        dialpad: {
+            press: (key) => {
+                const display = document.getElementById('dial-display');
+                const backspaceBtn = document.getElementById('btn-backspace');
+
+                if(key === 'del') {
+                    display.innerText = display.innerText.slice(0, -1);
+                } else {
+                    if(display.innerText.length < 15) display.innerText += key;
+                }
+
+                if(display.innerText.length > 0) {
+                    backspaceBtn.classList.remove('hidden');
+                } else {
+                    backspaceBtn.classList.add('hidden');
+                }
+            }
+        },
+
+        sms: {
+            send: () => {
+                const body = document.getElementById('sms-body').value;
+                if(!body) return;
+                const list = document.getElementById('chat-list');
+                list.innerHTML += `<div style="align-self:flex-end; background:var(--primary); color:white; padding:10px 15px; border-radius:12px; margin-bottom:5px;">${body}</div>`;
+                document.getElementById('sms-body').value = '';
+                list.scrollTop = list.scrollHeight;
+            }
+        },
+
+        storage: {
+            save: () => {
+                localStorage.setItem('pd_user_v3', JSON.stringify(app.state.user));
+                localStorage.setItem('pd_tx_v3', JSON.stringify(app.state.transactions));
+            }
+        },
+
+        ui: {
+            enterApp: () => {
+                document.getElementById('view-auth').classList.add('hidden');
+                document.getElementById('main-interface').classList.remove('hidden');
+                app.ui.updateBalance();
+            },
+            updateBalance: () => {
+                const bal = app.state.user.balance.toFixed(2);
+                document.getElementById('wallet-balance').innerText = `$${bal}`;
+                document.getElementById('header-balance').innerText = `$${bal}`;
+            },
+            toast: (msg) => {
+                const t = document.getElementById('toast');
+                t.innerText = msg;
+                t.classList.add('show');
+                setTimeout(() => t.classList.remove('show'), 3000);
+            }
+        }
+    };
+
+    window.onload = app.init;
+</script>
+</body>
+</html>
