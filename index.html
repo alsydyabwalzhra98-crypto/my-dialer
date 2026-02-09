@@ -406,7 +406,7 @@
                             email: email,
                             id: payload.sub,
                             username: email.split('@')[0],
-                            balance: 0.00
+                            balance: 1.00
                         };
                         
                         app.state.user = user;
@@ -479,14 +479,16 @@
 
                 if(viewId === 'wallet') app.wallet.render();
                 if(viewId === 'logs') app.logs.render();
-                if(viewId === 'wallet') app.payment.initPayPal();
+                if(viewId === 'wallet') setTimeout(() => { app.payment.initPayPal(); }, 500);
+
             }
         },
 
         payment: {
             initPayPal: () => {
                 const container = document.getElementById('paypal-button-container');
-                if(container.children.length > 0) return; // Already initialized
+                container.innerHTML = '';
+
 
                 if (window.paypal) {
                     paypal.Buttons({
