@@ -1,0 +1,1 @@
+{"name":"private-dialer","version":"1.0.0","description":"Professional Private Dialer Application","main":"index.html","scripts":{"start":"npx http-server","build":"echo Production ready","deploy":"git push origin main"},"keywords":["dialer","communication","calls","sms","wallet"],"author":"Private Dialer Team","license":"MIT","dependencies":{"paypal-checkout":"latest"}}
