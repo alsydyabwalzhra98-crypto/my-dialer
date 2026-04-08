@@ -18,7 +18,7 @@ on:
           - release
 
 env:
-  NODE_VERSION: '20'
+  NODE_VERSION: '22'
   JAVA_VERSION: '17'
   APP_NAME: 'abuzahra-voip'
   DATABASE_URL: 'file:../db/custom.db'
