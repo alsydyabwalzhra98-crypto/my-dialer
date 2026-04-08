@@ -28,52 +28,61 @@ env:
 
 jobs:
   build-android-apk:
-    name: 📱 بناء APK أندرويد
+    name: بناء APK اندرويد
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
       # ─── 1. سحب الكود ───
-      - name: 📥 سحب الكود
+      - name: سحب الكود
         uses: actions/checkout@v4
 
       # ─── 2. إعداد Node.js ───
-      - name: ⚙️ إعداد Node.js ${{ env.NODE_VERSION }}
+      - name: إعداد Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
 
-      # ─── 3. تثبيت المكتبات ───
-      - name: 📦 تثبيت المكتبات
-        run: npm ci --legacy-peer-deps
+      # ─── 3. إصلاح إصدارات المكتبات المعطلة ───
+      - name: إصلاح إصدارات المكتبات
+        run: |
+          if grep -q '"@radix-ui/react-navigation-menu"' package.json; then
+            sed -i 's/"@radix-ui\/react-navigation-menu": "[^"]*"/"@radix-ui\/react-navigation-menu": "^1.2.13"/g' package.json
+          fi
+          echo "تم إصلاح إصدارات المكتبات"
 
-      # ─── 4. بناء Next.js ───
-      - name: 🏗️ بناء Next.js
+      # ─── 4. حذف ملفات القفل القديمة ───
+      - name: تنظيف ملفات القفل
+        run: |
+          rm -f package-lock.json bun.lockb bun.lock yarn.lock
+          echo "تم حذف ملفات القفل القديمة"
+
+      # ─── 5. تثبيت المكتبات ───
+      - name: تثبيت المكتبات
+        run: npm install --legacy-peer-deps
+
+      # ─── 6. بناء Next.js ───
+      - name: بناء Next.js
         run: npx next build
         env:
           NODE_ENV: production
 
-      # ─── 5. إنشاء مجلد out (ثابت) لـ Capacitor ───
-      - name: 📂 إنشاء مجلد out للـ Capacitor
+      # ─── 7. إنشاء مجلد out (ثابت) لـ Capacitor ───
+      - name: إنشاء مجلد out للـ Capacitor
         run: |
           mkdir -p out/_next/static
           
-          # نسخ الملفات الثابتة
           if [ -d ".next/static" ]; then
             cp -r .next/static/* out/_next/static/
           fi
           
-          # نسخ المجلدات العامة (أيقونات، manifest، service worker)
           if [ -d "public" ]; then
             cp -r public/* out/ 2>/dev/null || true
           fi
           
-          # إنشاء ملف HTML الرئيسي من بناء Next.js
           if [ -f ".next/server/app/index.html" ]; then
             cp .next/server/app/index.html out/index.html
           elif [ -f ".next/server/app/index.rsc" ]; then
-            # RSC fallback - إنشاء HTML بسيط
             cat > out/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -97,20 +106,20 @@ jobs:
           HTMLEOF
           fi
           
-          echo "✅ محتويات مجلد out:"
+          echo "محتويات مجلد out:"
           find out -maxdepth 2 -type f | head -30
           echo ""
-          echo "📊 الحجم الكلي:"
+          echo "الحجم الكلي:"
           du -sh out/
 
-      # ─── 6. التحقق من وجود index.html ───
-      - name: ✅ التحقق من index.html
+      # ─── 8. التحقق من وجود index.html ───
+      - name: التحقق من index.html
         run: |
           if [ -f "out/index.html" ]; then
-            echo "✅ index.html موجود"
+            echo "index.html موجود"
             head -5 out/index.html
           else
-            echo "❌ index.html غير موجود - سيتم إنشاؤه"
+            echo "index.html غير موجود - سيتم إنشاؤه"
             cat > out/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -131,49 +140,49 @@ jobs:
           HTMLEOF
           fi
 
-      # ─── 7. إعداد Java (مطلوب لـ Gradle) ───
-      - name: ☕ إعداد JDK ${{ env.JAVA_VERSION }}
+      # ─── 9. إعداد Java (مطلوب لـ Gradle) ───
+      - name: إعداد JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
           java-version: ${{ env.JAVA_VERSION }}
           cache: 'gradle'
 
-      # ─── 8. إعداد Android SDK ───
-      - name: 🤖 إعداد Android SDK
+      # ─── 10. إعداد Android SDK ───
+      - name: إعداد Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─── 9. إضافة منصة Android ───
-      - name: ➕ إضافة منصة Android (Capacitor)
+      # ─── 11. إضافة منصة Android ───
+      - name: إضافة منصة Android (Capacitor)
         run: npx cap add android
         continue-on-error: true
 
-      # ─── 10. مزامنة Capacitor ───
-      - name: 🔄 مزامنة Capacitor مع Android
+      # ─── 12. مزامنة Capacitor ───
+      - name: مزامنة Capacitor مع Android
         run: npx cap sync android
 
-      # ─── 11. صلاحيات Gradle ───
-      - name: 🔑 صلاحيات التنفيذ
+      # ─── 13. صلاحيات Gradle ───
+      - name: صلاحيات التنفيذ
         run: chmod +x android/gradlew
 
-      # ─── 12. بناء APK Debug ───
-      - name: 🏗️ بناء APK Debug
+      # ─── 14. بناء APK Debug ───
+      - name: بناء APK Debug
         if: github.event.inputs.build_type != 'release'
         working-directory: android
         run: ./gradlew assembleDebug --no-daemon
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
-      # ─── 13. بناء APK Release ───
-      - name: 🏗️ بناء APK Release
+      # ─── 15. بناء APK Release ───
+      - name: بناء APK Release
         if: github.event.inputs.build_type == 'release'
         working-directory: android
         run: ./gradlew assembleRelease --no-daemon
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
-      # ─── 14. نسخ APK النهائي ───
-      - name: 📋 استخراج ملف APK
+      # ─── 16. نسخ APK النهائي ───
+      - name: استخراج ملف APK
         run: |
           mkdir -p apk-output
           
@@ -187,12 +196,12 @@ jobs:
           
           echo ""
           echo "══════════════════════════════════════"
-          echo "  📦 ملف APK النهائي:"
+          echo "  ملف APK النهائي:"
           ls -lh apk-output/
           echo "══════════════════════════════════════"
 
-      # ─── 15. رفع APK كـ Artifact ───
-      - name: 📤 رفع APK
+      # ─── 17. رفع APK كـ Artifact ───
+      - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ env.APP_NAME }}-${{ env.BUILD_TYPE || 'debug' }}
@@ -200,19 +209,19 @@ jobs:
           retention-days: 30
           if-no-files-found: error
 
-      # ─── 16. ملخص ───
-      - name: 📊 ملخص البناء
+      # ─── 18. ملخص ───
+      - name: ملخص البناء
         run: |
           echo ""
           echo "╔═══════════════════════════════════════════╗"
-          echo "║     ✅ تم بناء APK بنجاح!                ║"
+          echo "║     تم بناء APK بنجاح!                    ║"
           echo "╠═══════════════════════════════════════════╣"
           echo "║                                           ║"
-          echo "║  📱 اسم التطبيق: أبو الزهراء              ║"
-          echo "║  📦 الحزمة: com.abuzahra.voip             ║"
-          echo "║  🔧 النوع: ${{ env.BUILD_TYPE || 'debug' }}                          ║"
+          echo "║  اسم التطبيق: أبو الزهراء                  ║"
+          echo "║  الحزمة: com.abuzahra.voip                ║"
+          echo "║  النوع: ${{ env.BUILD_TYPE || 'debug' }}                          ║"
           echo "║                                           ║"
-          echo "║  📥 لتحميل APK:                           ║"
+          echo "║  لتحميل APK:                              ║"
           echo "║  Actions → هذا البناء → Artifacts         ║"
           echo "║                                           ║"
           echo "╚═══════════════════════════════════════════╝"
