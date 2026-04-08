@@ -1,0 +1,93 @@
+# ──────────────────────────────────────────
+# أبو الزهراء — GitHub Actions Build Workflow
+# ──────────────────────────────────────────
+# This workflow builds the Next.js application and
+# uploads the build output as an artifact.
+#
+# To deploy:
+#   1. Push this code to your GitHub repository
+#   2. Go to Settings → Secrets and add:
+#      - DATABASE_URL (optional, defaults to SQLite)
+#      - TWILIO_ACCOUNT_SID (optional, for real VoIP calls)
+#      - TWILIO_API_KEY (optional)
+#      - TWILIO_API_SECRET (optional)
+#      - TWILIO_TWIML_APP_SID (optional)
+#      - TWILIO_PHONE_NUMBER (optional)
+#   3. The workflow runs automatically on push to main
+# ──────────────────────────────────────────
+
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  # ───────── Job 1: Lint & Build ─────────
+  build:
+    name: Build Application
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout code
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: 📦 Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: 🔍 Run linting
+        run: bun run lint
+
+      - name: 🗄️ Generate Prisma Client
+        run: bun run db:generate
+        env:
+          DATABASE_URL: "file:./db/custom.db"
+
+      - name: 🏗️ Build Next.js
+        run: bun run build
+        env:
+          DATABASE_URL: "file:./db/custom.db"
+          # Twilio (optional - build works without them)
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID || '' }}
+          TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY || '' }}
+          TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET || '' }}
+          TWILIO_TWIML_APP_SID: ${{ secrets.TWILIO_TWIML_APP_SID || '' }}
+          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER || '' }}
+
+      - name: 📤 Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: abuzahra-build
+          path: .next/standalone/
+          retention-days: 30
+
+  # ───────── Job 2: Deploy (optional) ─────────
+  # Uncomment and configure this job to auto-deploy
+  # to your hosting provider (Vercel, Railway, etc.)
+  #
+  # deploy:
+  #   name: Deploy to Production
+  #   needs: build
+  #   runs-on: ubuntu-latest
+  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  #
+  #   steps:
+  #     - name: 📥 Download build artifact
+  #       uses: actions/download-artifact@v4
+  #       with:
+  #         name: abuzahra-build
+  #         path: ./deploy/
+  #
+  #     - name: 🚀 Deploy (example: Railway)
+  #       run: echo "Configure your deployment here"

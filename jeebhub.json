@@ -1,0 +1,101 @@
+{
+  "appId": "com.abuzahra.voip",
+  "appName": "أبو الزهراء",
+  "appType": "hybrid",
+  "version": "1.0.0",
+  "description": "تطبيق VoIP عربي احترافي للاتصالات الآمنة",
+  "platforms": ["android", "ios", "web"],
+  "language": "ar",
+  "rtl": true,
+  "build": {
+    "framework": "nextjs",
+    "frameworkVersion": "16.x",
+    "outputType": "static",
+    "buildCommand": "npm run build",
+    "outputDirectory": "out",
+    "port": 3000
+  },
+  "android": {
+    "package": "com.abuzahra.voip",
+    "minSdkVersion": 24,
+    "targetSdkVersion": 34,
+    "versionCode": 1,
+    "permissions": [
+      "INTERNET",
+      "RECORD_AUDIO",
+      "MODIFY_AUDIO_SETTINGS",
+      "READ_PHONE_STATE",
+      "ACCESS_NETWORK_STATE",
+      "VIBRATE",
+      "RECEIVE_BOOT_COMPLETED",
+      "WAKE_LOCK"
+    ],
+    "features": [
+      "android.hardware.microphone",
+      "android.hardware.telephony",
+      "android.hardware.touchscreen"
+    ],
+    "splashScreen": {
+      "backgroundColor": "#0078D7",
+      "image": "/icons/icon-512x512.png"
+    },
+    "statusBar": {
+      "style": "LIGHT",
+      "backgroundColor": "#0078D7"
+    }
+  },
+  "ios": {
+    "bundleIdentifier": "com.abuzahra.voip",
+    "deploymentTarget": "14.0",
+    "buildNumber": 1,
+    "permissions": {
+      "NSMicrophoneUsageDescription": "يحتاج التطبيق إلى الوصول إلى الميكروفون لإجراء المكالمات",
+      "NSCameraUsageDescription": "يحتاج التطبيق إلى الوصول إلى الكاميرا للمكالمات المرئية"
+    },
+    "splashScreen": {
+      "backgroundColor": "#0078D7",
+      "image": "/icons/icon-512x512.png"
+    },
+    "statusBar": {
+      "style": "LIGHT"
+    }
+  },
+  "web": {
+    "pwa": true,
+    "startUrl": "/",
+    "scope": "/",
+    "display": "standalone",
+    "orientation": "portrait",
+    "themeColor": "#0078D7",
+    "backgroundColor": "#0078D7",
+    "icons": {
+      "192": "/icons/icon-192x192.png",
+      "512": "/icons/icon-512x512.png"
+    },
+    "serviceWorker": "/sw.js"
+  },
+  "features": {
+    "voip": true,
+    "messaging": true,
+    "contacts": true,
+    "payments": true,
+    "authentication": true,
+    "offline": true,
+    "pushNotifications": true
+  },
+  "dependencies": {
+    "capacitor": "^6.x",
+    "capacitor-android": "^6.x",
+    "capacitor-ios": "^6.x"
+  },
+  "environment": {
+    "required": {
+      "TWILIO_ACCOUNT_SID": "Twilio Account SID (for VoIP calls)",
+      "TWILIO_API_KEY": "Twilio API Key",
+      "TWILIO_API_SECRET": "Twilio API Secret",
+      "TWILIO_TWIML_APP_SID": "Twilio TwiML App SID",
+      "TWILIO_PHONE_NUMBER": "Twilio Phone Number"
+    },
+    "optional": {}
+  }
+}
