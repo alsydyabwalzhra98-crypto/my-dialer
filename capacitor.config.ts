@@ -5,9 +5,6 @@ const config: CapacitorConfig = {
   appName: 'أبو الزهراء',
   webDir: 'out',
   server: {
-    // For development
-    // url: 'http://localhost:3000',
-    // cleartext: true
     androidScheme: 'https'
   },
   plugins: {
@@ -34,7 +31,7 @@ const config: CapacitorConfig = {
   },
   android: {
     backgroundColor: '#0078D7',
-    allowMixedContent: false,
+    allowMixedContent: true,
   },
   ios: {
     contentInset: 'automatic',
