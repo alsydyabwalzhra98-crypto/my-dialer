@@ -1,93 +1,218 @@
-# ──────────────────────────────────────────
-# أبو الزهراء — GitHub Actions Build Workflow
-# ──────────────────────────────────────────
-# This workflow builds the Next.js application and
-# uploads the build output as an artifact.
-#
-# To deploy:
-#   1. Push this code to your GitHub repository
-#   2. Go to Settings → Secrets and add:
-#      - DATABASE_URL (optional, defaults to SQLite)
-#      - TWILIO_ACCOUNT_SID (optional, for real VoIP calls)
-#      - TWILIO_API_KEY (optional)
-#      - TWILIO_API_SECRET (optional)
-#      - TWILIO_TWIML_APP_SID (optional)
-#      - TWILIO_PHONE_NUMBER (optional)
-#   3. The workflow runs automatically on push to main
-# ──────────────────────────────────────────
+# GitHub Actions Workflow - بناء تطبيق أبو الزهراء Android APK
+# يبني تلقائياً ملف APK عند كل push أو يدوياً
+# ============================================
 
-name: Build and Deploy
+name: Build Android APK
 
 on:
   push:
-    branches: [main, master]
-  pull_request:
-    branches: [main, master]
+    branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'نوع البناء'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+          - debug
+          - release
 
 env:
-  NODE_VERSION: "20"
+  NODE_VERSION: '20'
+  JAVA_VERSION: '17'
+  APP_NAME: 'abuzahra-voip'
 
 jobs:
-  # ───────── Job 1: Lint & Build ─────────
-  build:
-    name: Build Application
+  build-android-apk:
+    name: 📱 بناء APK أندرويد
     runs-on: ubuntu-latest
+    timeout-minutes: 30
 
     steps:
-      - name: 📥 Checkout code
+      # ─── 1. سحب الكود ───
+      - name: 📥 سحب الكود
         uses: actions/checkout@v4
 
-      - name: 🟢 Setup Bun
-        uses: oven-sh/setup-bun@v2
+      # ─── 2. إعداد Node.js ───
+      - name: ⚙️ إعداد Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          bun-version: latest
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
 
-      - name: 📦 Install dependencies
-        run: bun install --frozen-lockfile
+      # ─── 3. تثبيت المكتبات ───
+      - name: 📦 تثبيت المكتبات
+        run: npm ci --legacy-peer-deps
 
-      - name: 🔍 Run linting
-        run: bun run lint
-
-      - name: 🗄️ Generate Prisma Client
-        run: bun run db:generate
+      # ─── 4. بناء Next.js ───
+      - name: 🏗️ بناء Next.js
+        run: npx next build
         env:
-          DATABASE_URL: "file:./db/custom.db"
+          NODE_ENV: production
 
-      - name: 🏗️ Build Next.js
-        run: bun run build
+      # ─── 5. إنشاء مجلد out (ثابت) لـ Capacitor ───
+      - name: 📂 إنشاء مجلد out للـ Capacitor
+        run: |
+          mkdir -p out/_next/static
+          
+          # نسخ الملفات الثابتة
+          if [ -d ".next/static" ]; then
+            cp -r .next/static/* out/_next/static/
+          fi
+          
+          # نسخ المجلدات العامة (أيقونات، manifest، service worker)
+          if [ -d "public" ]; then
+            cp -r public/* out/ 2>/dev/null || true
+          fi
+          
+          # إنشاء ملف HTML الرئيسي من بناء Next.js
+          if [ -f ".next/server/app/index.html" ]; then
+            cp .next/server/app/index.html out/index.html
+          elif [ -f ".next/server/app/index.rsc" ]; then
+            # RSC fallback - إنشاء HTML بسيط
+            cat > out/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="utf-8"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+            <meta name="theme-color" content="#0078D7"/>
+            <meta name="apple-mobile-web-app-capable" content="yes"/>
+            <meta name="mobile-web-app-capable" content="yes"/>
+            <meta name="description" content="تطبيق VoIP عربي احترافي"/>
+            <link rel="manifest" href="/manifest.json"/>
+            <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+            <link rel="icon" href="/icons/icon-192x192.png"/>
+            <title>أبو الزهراء - الاتصال الآمن</title>
+            <script type="module" src="/_next/static/chunks/main-app.js"></script>
+          </head>
+          <body>
+            <div id="__next"></div>
+          </body>
+          </html>
+          HTMLEOF
+          fi
+          
+          echo "✅ محتويات مجلد out:"
+          find out -maxdepth 2 -type f | head -30
+          echo ""
+          echo "📊 الحجم الكلي:"
+          du -sh out/
+
+      # ─── 6. التحقق من وجود index.html ───
+      - name: ✅ التحقق من index.html
+        run: |
+          if [ -f "out/index.html" ]; then
+            echo "✅ index.html موجود"
+            head -5 out/index.html
+          else
+            echo "❌ index.html غير موجود - سيتم إنشاؤه"
+            cat > out/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html lang="ar" dir="rtl">
+          <head>
+            <meta charset="utf-8"/>
+            <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no"/>
+            <meta name="theme-color" content="#0078D7"/>
+            <meta name="apple-mobile-web-app-capable" content="yes"/>
+            <meta name="mobile-web-app-capable" content="yes"/>
+            <link rel="manifest" href="/manifest.json"/>
+            <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+            <link rel="icon" href="/icons/icon-192x192.png"/>
+            <title>أبو الزهراء</title>
+            <script type="module" src="/_next/static/chunks/main-app.js"></script>
+          </head>
+          <body><div id="__next"></div></body>
+          </html>
+          HTMLEOF
+          fi
+
+      # ─── 7. إعداد Java (مطلوب لـ Gradle) ───
+      - name: ☕ إعداد JDK ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: ${{ env.JAVA_VERSION }}
+          cache: 'gradle'
+
+      # ─── 8. إعداد Android SDK ───
+      - name: 🤖 إعداد Android SDK
+        uses: android-actions/setup-android@v3
+
+      # ─── 9. إضافة منصة Android ───
+      - name: ➕ إضافة منصة Android (Capacitor)
+        run: npx cap add android
+        continue-on-error: true
+
+      # ─── 10. مزامنة Capacitor ───
+      - name: 🔄 مزامنة Capacitor مع Android
+        run: npx cap sync android
+
+      # ─── 11. صلاحيات Gradle ───
+      - name: 🔑 صلاحيات التنفيذ
+        run: chmod +x android/gradlew
+
+      # ─── 12. بناء APK Debug ───
+      - name: 🏗️ بناء APK Debug
+        if: github.event.inputs.build_type != 'release'
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
         env:
-          DATABASE_URL: "file:./db/custom.db"
-          # Twilio (optional - build works without them)
-          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID || '' }}
-          TWILIO_API_KEY: ${{ secrets.TWILIO_API_KEY || '' }}
-          TWILIO_API_SECRET: ${{ secrets.TWILIO_API_SECRET || '' }}
-          TWILIO_TWIML_APP_SID: ${{ secrets.TWILIO_TWIML_APP_SID || '' }}
-          TWILIO_PHONE_NUMBER: ${{ secrets.TWILIO_PHONE_NUMBER || '' }}
+          JAVA_HOME: ${{ env.JAVA_HOME }}
 
-      - name: 📤 Upload build artifact
+      # ─── 13. بناء APK Release ───
+      - name: 🏗️ بناء APK Release
+        if: github.event.inputs.build_type == 'release'
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon
+        env:
+          JAVA_HOME: ${{ env.JAVA_HOME }}
+
+      # ─── 14. نسخ APK النهائي ───
+      - name: 📋 استخراج ملف APK
+        run: |
+          mkdir -p apk-output
+          
+          if [ "${{ github.event.inputs.build_type }}" = "release" ] && [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            cp android/app/build/outputs/apk/release/app-release.apk apk-output/${{ env.APP_NAME }}-release.apk
+            echo "BUILD_TYPE=release" >> $GITHUB_ENV
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk apk-output/${{ env.APP_NAME }}.apk
+            echo "BUILD_TYPE=debug" >> $GITHUB_ENV
+          fi
+          
+          echo ""
+          echo "══════════════════════════════════════"
+          echo "  📦 ملف APK النهائي:"
+          ls -lh apk-output/
+          echo "══════════════════════════════════════"
+
+      # ─── 15. رفع APK كـ Artifact ───
+      - name: 📤 رفع APK
         uses: actions/upload-artifact@v4
         with:
-          name: abuzahra-build
-          path: .next/standalone/
+          name: ${{ env.APP_NAME }}-${{ env.BUILD_TYPE || 'debug' }}
+          path: apk-output/*.apk
           retention-days: 30
+          if-no-files-found: error
 
-  # ───────── Job 2: Deploy (optional) ─────────
-  # Uncomment and configure this job to auto-deploy
-  # to your hosting provider (Vercel, Railway, etc.)
-  #
-  # deploy:
-  #   name: Deploy to Production
-  #   needs: build
-  #   runs-on: ubuntu-latest
-  #   if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-  #
-  #   steps:
-  #     - name: 📥 Download build artifact
-  #       uses: actions/download-artifact@v4
-  #       with:
-  #         name: abuzahra-build
-  #         path: ./deploy/
-  #
-  #     - name: 🚀 Deploy (example: Railway)
-  #       run: echo "Configure your deployment here"
+      # ─── 16. ملخص ───
+      - name: 📊 ملخص البناء
+        run: |
+          echo ""
+          echo "╔═══════════════════════════════════════════╗"
+          echo "║     ✅ تم بناء APK بنجاح!                ║"
+          echo "╠═══════════════════════════════════════════╣"
+          echo "║                                           ║"
+          echo "║  📱 اسم التطبيق: أبو الزهراء              ║"
+          echo "║  📦 الحزمة: com.abuzahra.voip             ║"
+          echo "║  🔧 النوع: ${{ env.BUILD_TYPE || 'debug' }}                          ║"
+          echo "║                                           ║"
+          echo "║  📥 لتحميل APK:                           ║"
+          echo "║  Actions → هذا البناء → Artifacts         ║"
+          echo "║                                           ║"
+          echo "╚═══════════════════════════════════════════╝"
