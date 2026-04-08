@@ -1,7 +1,3 @@
-# GitHub Actions Workflow - بناء تطبيق أبو الزهراء Android APK
-# يبني تلقائياً ملف APK عند كل push أو يدوياً
-# ============================================
-
 name: Build Android APK
 
 on:
@@ -33,53 +29,80 @@ jobs:
     timeout-minutes: 30
 
     steps:
-      # ─── 1. سحب الكود ───
       - name: سحب الكود
         uses: actions/checkout@v4
 
-      # ─── 2. إعداد Node.js ───
       - name: إعداد Node.js ${{ env.NODE_VERSION }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      # ─── 3. إصلاح إصدارات المكتبات المعطلة ───
-      - name: إصلاح إصدارات المكتبات
+      # ⭐ الخطوة السحرية - تصلح جميع الإصدارات تلقائياً من npm
+      - name: إصلاح جميع إصدارات المكتبات من npm
         run: |
-          if grep -q '"@radix-ui/react-navigation-menu"' package.json; then
-            sed -i 's/"@radix-ui\/react-navigation-menu": "[^"]*"/"@radix-ui\/react-navigation-menu": "^1.2.13"/g' package.json
-          fi
-          echo "تم إصلاح إصدارات المكتبات"
+          node -e "
+          const fs = require('fs');
+          const { execSync } = require('child_process');
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+          let fixed = 0;
+          
+          for (const [name, version] of Object.entries(allDeps)) {
+            const ver = version.replace(/[\^~]/g, '');
+            try {
+              const info = JSON.parse(
+                execSync('npm view ' + name + ' version --json 2>/dev/null', { encoding: 'utf8', timeout: 15000 }).trim()
+              );
+              const latest = Array.isArray(info) ? info[info.length - 1] : info;
+              const major = latest.split('.')[0];
+              const reqMajor = ver.split('.')[0];
+              
+              if (major !== reqMajor) {
+                const newVer = '^' + latest;
+                if (pkg.dependencies[name]) {
+                  pkg.dependencies[name] = newVer;
+                } else if (pkg.devDependencies[name]) {
+                  pkg.devDependencies[name] = newVer;
+                }
+                console.log('FIXED: ' + name + ' ' + version + ' -> ' + newVer);
+                fixed++;
+              } else {
+                console.log('OK: ' + name + ' ' + version);
+              }
+            } catch (e) {
+              console.log('SKIP: ' + name + ' (cannot verify)');
+            }
+          }
+          
+          if (fixed > 0) {
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('\nTotal packages fixed: ' + fixed);
+          } else {
+            console.log('\nAll versions are correct!');
+          }
+          "
 
-      # ─── 4. حذف ملفات القفل القديمة ───
       - name: تنظيف ملفات القفل
         run: |
           rm -f package-lock.json bun.lockb bun.lock yarn.lock
-          echo "تم حذف ملفات القفل القديمة"
 
-      # ─── 5. تثبيت المكتبات ───
       - name: تثبيت المكتبات
         run: npm install --legacy-peer-deps
 
-      # ─── 6. بناء Next.js ───
       - name: بناء Next.js
         run: npx next build
         env:
           NODE_ENV: production
 
-      # ─── 7. إنشاء مجلد out (ثابت) لـ Capacitor ───
       - name: إنشاء مجلد out للـ Capacitor
         run: |
           mkdir -p out/_next/static
-          
           if [ -d ".next/static" ]; then
             cp -r .next/static/* out/_next/static/
           fi
-          
           if [ -d "public" ]; then
             cp -r public/* out/ 2>/dev/null || true
           fi
-          
           if [ -f ".next/server/app/index.html" ]; then
             cp .next/server/app/index.html out/index.html
           elif [ -f ".next/server/app/index.rsc" ]; then
@@ -99,27 +122,14 @@ jobs:
             <title>أبو الزهراء - الاتصال الآمن</title>
             <script type="module" src="/_next/static/chunks/main-app.js"></script>
           </head>
-          <body>
-            <div id="__next"></div>
-          </body>
+          <body><div id="__next"></div></body>
           </html>
           HTMLEOF
           fi
-          
-          echo "محتويات مجلد out:"
-          find out -maxdepth 2 -type f | head -30
-          echo ""
-          echo "الحجم الكلي:"
-          du -sh out/
 
-      # ─── 8. التحقق من وجود index.html ───
       - name: التحقق من index.html
         run: |
-          if [ -f "out/index.html" ]; then
-            echo "index.html موجود"
-            head -5 out/index.html
-          else
-            echo "index.html غير موجود - سيتم إنشاؤه"
+          if [ ! -f "out/index.html" ]; then
             cat > out/index.html << 'HTMLEOF'
           <!DOCTYPE html>
           <html lang="ar" dir="rtl">
@@ -140,7 +150,6 @@ jobs:
           HTMLEOF
           fi
 
-      # ─── 9. إعداد Java (مطلوب لـ Gradle) ───
       - name: إعداد JDK ${{ env.JAVA_VERSION }}
         uses: actions/setup-java@v4
         with:
@@ -148,24 +157,19 @@ jobs:
           java-version: ${{ env.JAVA_VERSION }}
           cache: 'gradle'
 
-      # ─── 10. إعداد Android SDK ───
       - name: إعداد Android SDK
         uses: android-actions/setup-android@v3
 
-      # ─── 11. إضافة منصة Android ───
       - name: إضافة منصة Android (Capacitor)
         run: npx cap add android
         continue-on-error: true
 
-      # ─── 12. مزامنة Capacitor ───
       - name: مزامنة Capacitor مع Android
         run: npx cap sync android
 
-      # ─── 13. صلاحيات Gradle ───
       - name: صلاحيات التنفيذ
         run: chmod +x android/gradlew
 
-      # ─── 14. بناء APK Debug ───
       - name: بناء APK Debug
         if: github.event.inputs.build_type != 'release'
         working-directory: android
@@ -173,7 +177,6 @@ jobs:
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
-      # ─── 15. بناء APK Release ───
       - name: بناء APK Release
         if: github.event.inputs.build_type == 'release'
         working-directory: android
@@ -181,11 +184,9 @@ jobs:
         env:
           JAVA_HOME: ${{ env.JAVA_HOME }}
 
-      # ─── 16. نسخ APK النهائي ───
       - name: استخراج ملف APK
         run: |
           mkdir -p apk-output
-          
           if [ "${{ github.event.inputs.build_type }}" = "release" ] && [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
             cp android/app/build/outputs/apk/release/app-release.apk apk-output/${{ env.APP_NAME }}-release.apk
             echo "BUILD_TYPE=release" >> $GITHUB_ENV
@@ -193,14 +194,8 @@ jobs:
             cp android/app/build/outputs/apk/debug/app-debug.apk apk-output/${{ env.APP_NAME }}.apk
             echo "BUILD_TYPE=debug" >> $GITHUB_ENV
           fi
-          
-          echo ""
-          echo "══════════════════════════════════════"
-          echo "  ملف APK النهائي:"
           ls -lh apk-output/
-          echo "══════════════════════════════════════"
 
-      # ─── 17. رفع APK كـ Artifact ───
       - name: رفع APK
         uses: actions/upload-artifact@v4
         with:
@@ -208,20 +203,3 @@ jobs:
           path: apk-output/*.apk
           retention-days: 30
           if-no-files-found: error
-
-      # ─── 18. ملخص ───
-      - name: ملخص البناء
-        run: |
-          echo ""
-          echo "╔═══════════════════════════════════════════╗"
-          echo "║     تم بناء APK بنجاح!                    ║"
-          echo "╠═══════════════════════════════════════════╣"
-          echo "║                                           ║"
-          echo "║  اسم التطبيق: أبو الزهراء                  ║"
-          echo "║  الحزمة: com.abuzahra.voip                ║"
-          echo "║  النوع: ${{ env.BUILD_TYPE || 'debug' }}                          ║"
-          echo "║                                           ║"
-          echo "║  لتحميل APK:                              ║"
-          echo "║  Actions → هذا البناء → Artifacts         ║"
-          echo "║                                           ║"
-          echo "╚═══════════════════════════════════════════╝"
