@@ -5,6 +5,9 @@ const config: CapacitorConfig = {
   appName: 'أبو الزهراء',
   webDir: 'out',
   server: {
+    // ⭐ غيّر هذا الرابط إلى رابط سيرفرك بعد رفع التطبيق
+    // url: 'https://abualzahracom.online',
+    // cleartext: true,
     androidScheme: 'https'
   },
   plugins: {
